@@ -2,39 +2,41 @@ import React, { useState } from 'react';
 import { Plus, Package, TrendingUp, ShieldCheck, Truck, RefreshCw, AlertCircle, CheckCircle, Trash2, Edit2, Download, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { InventoryBatch, CropCategory } from '../types';
+import { BackendOrder } from '../services/marketplaceBackend';
 
 interface FarmerDashboardProps {
   inventory: InventoryBatch[];
+  orders: BackendOrder[];
   onAddBatch: (batch: Omit<InventoryBatch, 'id'>) => void;
   onUpdateBatch: (id: string, updates: Partial<InventoryBatch>) => void;
   onDeleteBatch: (id: string) => void;
   isOnline: boolean;
   isShared?: boolean;
-  onOpenTracking: (trackingNumber: string) => void;
 }
 
 export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
   inventory,
+  orders,
   onAddBatch,
   onUpdateBatch,
   onDeleteBatch,
   isOnline,
   isShared = false,
-  onOpenTracking,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingBatch, setEditingBatch] = useState<InventoryBatch | null>(null);
 
   // New batch form state
-  const [cropName, setCropName] = useState('Hard Red Winter Wheat');
-  const [variety, setVariety] = useState('Kwale High-Protein Grain');
+  const [cropName, setCropName] = useState('');
+  const [variety, setVariety] = useState('');
   const [category, setCategory] = useState<CropCategory>('grains');
-  const [lotNumber, setLotNumber] = useState(`LOT-ELD-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
-  const [quantityTonnes, setQuantityTonnes] = useState<number>(50);
-  const [pricePerTonne, setPricePerTonne] = useState<number>(340);
-  const [moistureContent, setMoistureContent] = useState<number>(12.2);
-  const [grade, setGrade] = useState('Grade 1 (Premium)');
-  const [warehouseLocation, setWarehouseLocation] = useState('Eldoret Silo Bay 3');
+  const [lotNumber, setLotNumber] = useState('');
+  const [quantityTonnes, setQuantityTonnes] = useState<number>(0);
+  const [pricePerTonne, setPricePerTonne] = useState<number>(0);
+  const [moistureContent, setMoistureContent] = useState<number>(0);
+  const [grade, setGrade] = useState('');
+  const [warehouseLocation, setWarehouseLocation] = useState('');
+  const [harvestDate, setHarvestDate] = useState('');
 
   // Compute metrics
   const totalStockMT = inventory.reduce((acc, curr) => acc + curr.quantityTonnes, 0);
@@ -47,20 +49,27 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
       cropName,
       variety,
       category,
-      lotNumber: lotNumber || `LOT-${Math.floor(Math.random() * 9000 + 1000)}`,
+      lotNumber,
       quantityTonnes,
       pricePerTonne,
       moistureContent,
       grade,
       status: 'Available',
       warehouseLocation,
-      harvestDate: new Date().toISOString().split('T')[0],
-      syncStatus: isOnline ? 'synced' : 'pending_sync',
+      harvestDate,
+      syncStatus: isShared && isOnline ? 'synced' : 'pending_sync',
     });
     setShowAddModal(false);
     // Reset defaults
-    setLotNumber(`LOT-ELD-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
-    setQuantityTonnes(50);
+    setCropName('');
+    setVariety('');
+    setLotNumber('');
+    setQuantityTonnes(0);
+    setPricePerTonne(0);
+    setMoistureContent(0);
+    setGrade('');
+    setWarehouseLocation('');
+    setHarvestDate('');
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -73,7 +82,7 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
       moistureContent: editingBatch.moistureContent,
       status: editingBatch.status,
       warehouseLocation: editingBatch.warehouseLocation,
-      syncStatus: isOnline ? 'synced' : 'pending_sync',
+      syncStatus: isShared && isOnline ? 'synced' : 'pending_sync',
     });
     setEditingBatch(null);
   };
@@ -91,15 +100,15 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#48B749] mb-1">
                 <Sparkles className="w-3.5 h-3.5 text-[#F7B500]" />
-                <span>Outgrower Management Console</span>
+                <span>Producer Inventory</span>
                 <span aria-hidden="true">·</span>
-                <span>{isShared ? 'Shared Inventory Portal' : 'Offline-Ready Farm Portal'}</span>
+                <span>{isShared ? 'Shared Inventory Portal' : 'Local-only inventory'}</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-stone-900">
                 Farmer Hub · Silo &amp; Inventory Terminal
               </h1>
               <p className="text-xs sm:text-sm text-stone-600 mt-1">
-                Catalog harvests, calibrate moisture tolerances, monitor pending escrow disbursements, and dispatch haulage.
+                Record inventory and manage current order requests. Payment processing is not connected.
               </p>
             </div>
 
@@ -145,7 +154,7 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
           <p className="text-2xl font-extrabold font-display text-[#0D5C3A] tabular-nums">
             ${totalValuation.toLocaleString()}
           </p>
-          <p className="text-[11px] text-stone-500 mt-1">Calculated at current spot rates</p>
+          <p className="text-[11px] text-stone-500 mt-1">Based on producer-entered prices</p>
         </motion.div>
 
         <motion.div
@@ -154,13 +163,13 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
           className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs"
         >
           <div className="flex items-center justify-between text-xs text-stone-500 mb-2">
-            <span className="font-medium">Escrow In Transit</span>
+            <span className="font-medium">Order requests</span>
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-2xl font-extrabold font-display text-stone-900 tabular-nums">
-            $31,125 <span className="text-xs font-bold text-emerald-700">Secured</span>
+            {orders.length}
           </p>
-          <p className="text-[11px] text-stone-500 mt-1">2 orders awaiting buyer weigh-in</p>
+          <p className="text-[11px] text-stone-500 mt-1">No payment or escrow processing</p>
         </motion.div>
 
         <motion.div
@@ -175,14 +184,16 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
           <p className="text-base font-bold font-display text-stone-900 mt-1">
             {!isOnline ? (
               <span className="text-amber-800">{isShared ? 'Offline (cloud unavailable)' : 'Offline (Local Cache)'}</span>
+            ) : !isShared ? (
+              <span className="text-stone-700">Local only</span>
             ) : pendingSyncCount > 0 ? (
-              <span className="text-amber-700">{pendingSyncCount} Queued</span>
+              <span className="text-amber-700">{pendingSyncCount} not synced</span>
             ) : (
               <span className="text-emerald-800">Synced to Cloud</span>
             )}
           </p>
           <p className="text-[11px] text-stone-500 mt-1">
-            {!isOnline ? 'Entries will sync upon re-link' : 'All farm records current'}
+            {!isOnline ? 'Shared updates unavailable while offline' : isShared ? 'Shared records are current' : 'Records stay on this device'}
           </p>
         </motion.div>
       </div>
@@ -192,7 +203,7 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
         <div className="p-5 sm:p-6 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-50/70">
           <div>
             <h2 className="text-base font-bold text-stone-900 font-display">Active Farm Batches & Silo Lots</h2>
-            <p className="text-sm text-stone-600 mt-1">Inventory records saved in this browser.</p>
+            <p className="text-sm text-stone-600 mt-1">{isShared ? 'Inventory shared with your producer account.' : 'Inventory records are saved on this device only.'}</p>
           </div>
           <div className="text-xs text-stone-500 flex items-center gap-3">
             <span>Click actions to calibrate or edit</span>
@@ -220,7 +231,7 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
                     <p className="text-[11px] text-stone-500 mt-0.5">{batch.variety} · {batch.lotNumber}</p>
                     {batch.syncStatus === 'pending_sync' && (
                       <span className="inline-block mt-1 text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 font-bold">
-                        Queued for sync (offline)
+                        Saved locally; not synced
                       </span>
                     )}
                   </td>
@@ -275,61 +286,38 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
           </table>
         </div>
 
-      {/* Recent Fulfillment Orders & Haulage Dispatches */}
+      {/* Shared order requests */}
       <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-xs">
-        <div className="p-5 sm:p-6 border-b border-stone-200 flex items-center justify-between">
+        <div className="p-5 sm:p-6 border-b border-stone-200">
           <div>
-            <h2 className="text-base font-bold text-stone-900 font-display">Active Purchase Orders & Freight Dispatches</h2>
-            <p className="text-sm text-stone-600 mt-1">Example order and shipment records stored on this device.</p>
+            <h2 className="text-base font-bold text-stone-900 font-display">Order requests</h2>
+            <p className="text-sm text-stone-600 mt-1">Requests submitted to your shared producer account. Payment is not processed here.</p>
           </div>
-          <button
-            onClick={() => onOpenTracking('AGRO-TRK-88294')}
-            className="text-xs font-bold text-[#0D5C3A] hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <Truck className="w-3.5 h-3.5" />
-            <span>Track All Dispatches</span>
-          </button>
         </div>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <motion.div whileHover={{ y: -2 }} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/60 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-stone-900">PO #ORD-9921 · Millstream Grain Millers</span>
-                <p className="text-[11px] text-stone-500">Agroline Royal Rice & Wheat · 50 Metric Tonnes</p>
-              </div>
-              <span className="text-xs font-extrabold text-[#0D5C3A] tabular-nums">$29,000 in Escrow</span>
-            </div>
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-stone-200 text-stone-600">
-              <span>Status: <strong className="text-blue-700">In Transit on Highway</strong></span>
-              <button
-                onClick={() => onOpenTracking('AGRO-TRK-88294')}
-                className="px-3 py-1 bg-white border border-stone-300 rounded-lg font-bold hover:bg-stone-50 text-[11px] shadow-2xs cursor-pointer"
-              >
-                Track AGRO-TRK-88294
-              </button>
-            </div>
-          </motion.div>
-
-          <motion.div whileHover={{ y: -2 }} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/60 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-stone-900">PO #ORD-9884 · Pan-African Oilseed Refiners</span>
-                <p className="text-[11px] text-stone-500">Organic Soybeans · 30 Metric Tonnes</p>
-              </div>
-              <span className="text-xs font-extrabold text-[#0D5C3A] tabular-nums">$15,600 in Escrow</span>
-            </div>
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-stone-200 text-stone-600">
-              <span>Status: <strong className="text-amber-700">Hub Inspection Passed</strong></span>
-              <button
-                onClick={() => onOpenTracking('AGRO-TRK-77312')}
-                className="px-3 py-1 bg-white border border-stone-300 rounded-lg font-bold hover:bg-stone-50 text-[11px] shadow-2xs cursor-pointer"
-              >
-                Track AGRO-TRK-77312
-              </button>
-            </div>
-          </motion.div>
-        </div>
+        {orders.length === 0 ? (
+          <p className="p-6 text-sm text-stone-600">
+            {isShared ? 'No order requests yet.' : 'Order requests require the shared Supabase service; local records are not sent to producers.'}
+          </p>
+        ) : (
+          <div className="divide-y divide-stone-200">
+            {orders.map((order) => (
+              <article key={order.id} className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-stone-900">Order {order.id.slice(0, 8)}</p>
+                  <p className="mt-1 text-xs text-stone-600">
+                    {order.items.map((item) => `${item.crop_name} · ${item.quantity_tonnes} MT`).join(', ')}
+                  </p>
+                  <p className="mt-1 text-xs text-stone-500">{order.buyer_organization}</p>
+                </div>
+                <div className="text-sm sm:text-right">
+                  <p className="font-bold text-stone-900">${Number(order.subtotal).toLocaleString()}</p>
+                  <p className="text-xs capitalize text-stone-600">{order.status} · order request only</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
       </div>
       </div>
@@ -371,6 +359,29 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
+                    <label className="block font-bold text-stone-700 mb-1">Lot Number</label>
+                    <input
+                      type="text"
+                      required
+                      value={lotNumber}
+                      onChange={(e) => setLotNumber(e.target.value)}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Harvest Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={harvestDate}
+                      onChange={(e) => setHarvestDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
                     <label className="block font-bold text-stone-700 mb-1">Variety / Seed Line</label>
                     <input
                       type="text"
@@ -401,10 +412,11 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
                     <label className="block font-bold text-stone-700 mb-1">Stock (Tonnes)</label>
                     <input
                       type="number"
-                      min="1"
+                      min="0.01"
+                      step="0.01"
                       required
                       value={quantityTonnes}
-                      onChange={(e) => setQuantityTonnes(parseFloat(e.target.value) || 1)}
+                      onChange={(e) => setQuantityTonnes(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-stone-300 rounded-xl tabular-nums font-bold"
                     />
                   </div>
@@ -412,10 +424,11 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
                     <label className="block font-bold text-stone-700 mb-1">Price / MT ($)</label>
                     <input
                       type="number"
-                      min="10"
+                      min="0.01"
+                      step="0.01"
                       required
                       value={pricePerTonne}
-                      onChange={(e) => setPricePerTonne(parseFloat(e.target.value) || 10)}
+                      onChange={(e) => setPricePerTonne(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-stone-300 rounded-xl tabular-nums font-bold"
                     />
                   </div>
@@ -424,11 +437,11 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
                     <input
                       type="number"
                       step="0.1"
-                      min="5"
-                      max="25"
+                      min="0"
+                      max="100"
                       required
                       value={moistureContent}
-                      onChange={(e) => setMoistureContent(parseFloat(e.target.value) || 12)}
+                      onChange={(e) => setMoistureContent(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-stone-300 rounded-xl tabular-nums font-bold"
                     />
                   </div>
@@ -438,10 +451,12 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
                   <div>
                     <label className="block font-bold text-stone-700 mb-1">Quality Grade</label>
                     <select
+                      required
                       value={grade}
                       onChange={(e) => setGrade(e.target.value)}
                       className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium"
                     >
+                      <option value="">Select a producer-entered grade</option>
                       <option value="Grade 1 (Premium)">Grade 1 (Premium)</option>
                       <option value="Grade 2 (Standard)">Grade 2 (Standard)</option>
                       <option value="Organic Certified">Organic Certified</option>
@@ -462,7 +477,7 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
                 {!isOnline && (
                   <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-[11px] flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>Working in rural offline mode: saved locally and will sync automatically once network returns.</span>
+                    <span>Saved on this device only. Automatic synchronization is not available.</span>
                   </div>
                 )}
 
@@ -480,7 +495,7 @@ export const FarmerDashboard: React.FC<FarmerDashboardProps> = ({
                     type="submit"
                     className="px-6 py-2.5 bg-[#0D5C3A] text-white rounded-xl font-bold hover:bg-[#094B2E] shadow-md cursor-pointer"
                   >
-                    Confirm & List Lot
+                    {isShared ? 'Publish inventory' : 'Save local inventory'}
                   </motion.button>
                 </div>
               </form>

@@ -8,7 +8,6 @@ interface MessagingCenterProps {
   onSendMessage: (threadId: string, text: string, proposal?: ChatMessage['proposal']) => void;
   isOnline: boolean;
   isShared?: boolean;
-  onAcceptProposal?: (proposal: NonNullable<ChatMessage['proposal']>) => void;
 }
 
 export const MessagingCenter: React.FC<MessagingCenterProps> = ({
@@ -17,7 +16,6 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
   onSendMessage,
   isOnline,
   isShared = false,
-  onAcceptProposal,
 }) => {
   const [selectedId, setSelectedId] = useState<string>(
     activeThreadId || (threads[0]?.id || '')
@@ -26,9 +24,9 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
   const [showProposalForm, setShowProposalForm] = useState(false);
 
   // Proposal form state
-  const [propCrop, setPropCrop] = useState('Hard Red Winter Wheat');
-  const [propTonnes, setPropTonnes] = useState(30);
-  const [propPrice, setPropPrice] = useState(340);
+  const [propCrop, setPropCrop] = useState('');
+  const [propTonnes, setPropTonnes] = useState(1);
+  const [propPrice, setPropPrice] = useState(0);
 
   const activeThread = threads.find((t) => t.id === selectedId) || threads[0];
 
@@ -45,7 +43,7 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
     const total = propTonnes * propPrice;
     onSendMessage(
       activeThread.id,
-      `I would like to submit a formal trade proposal for ${propTonnes} MT of ${propCrop} at $${propPrice}/MT ($${total.toLocaleString()} total in Agroline Escrow).`,
+      `I would like to discuss ${propTonnes} MT of ${propCrop} at $${propPrice}/MT (quoted subtotal: $${total.toLocaleString()}).`,
       {
         cropName: propCrop,
         tonnes: propTonnes,
@@ -158,7 +156,7 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
                 <form onSubmit={handleSendProposal} className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-stone-900 font-display">
-                      Generate Formal Escrow Purchase Proposal
+                      Share a trade quote for discussion
                     </span>
                     <button
                       type="button"
@@ -174,6 +172,7 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
                       <label className="block text-stone-600 mb-1">Crop Subject</label>
                       <input
                         type="text"
+                        required
                         value={propCrop}
                         onChange={(e) => setPropCrop(e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded focus:outline-none"
@@ -183,9 +182,10 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
                       <label className="block text-stone-600 mb-1">Tonnes (MT)</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0.01"
+                        step="0.01"
                         value={propTonnes}
-                        onChange={(e) => setPropTonnes(parseInt(e.target.value) || 1)}
+                        onChange={(e) => setPropTonnes(parseFloat(e.target.value) || 0.01)}
                         className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded tabular-nums"
                       />
                     </div>
@@ -193,9 +193,10 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
                       <label className="block text-stone-600 mb-1">Price / MT ($)</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0.01"
+                        step="0.01"
                         value={propPrice}
-                        onChange={(e) => setPropPrice(parseInt(e.target.value) || 1)}
+                        onChange={(e) => setPropPrice(parseFloat(e.target.value) || 0.01)}
                         className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded tabular-nums"
                       />
                     </div>
@@ -203,7 +204,7 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
 
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-stone-600">
-                      Total Escrow Value: <strong className="text-[#0D5C3A] tabular-nums">${(propTonnes * propPrice).toLocaleString()}</strong>
+                      Quoted subtotal: <strong className="text-[#0D5C3A] tabular-nums">${(propTonnes * propPrice).toLocaleString()}</strong>
                     </span>
                     <button
                       type="submit"
@@ -249,7 +250,7 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-bold uppercase tracking-wider text-[10px] text-[#F7B500]">
-                              Agroline Escrow Contract Offer
+                              Trade quote · discussion only
                             </span>
                             <span className="font-semibold text-[10px] bg-emerald-800 text-white px-2 py-0.5 rounded">
                               {msg.proposal.status}
@@ -269,20 +270,15 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
                               <span className="font-semibold tabular-nums">${msg.proposal.pricePerTonne}</span>
                             </div>
                             <div>
-                              <span className="opacity-70 block">Total Escrow</span>
+                              <span className="opacity-70 block">Quoted subtotal</span>
                               <span className="font-bold text-[#F7B500] tabular-nums">
                                 ${msg.proposal.total.toLocaleString()}
                               </span>
                             </div>
                           </div>
-                          {onAcceptProposal && msg.proposal.status === 'Pending' && (
-                            <button
-                              onClick={() => onAcceptProposal(msg.proposal!)}
-                              className="w-full mt-2 py-1.5 bg-[#0D5C3A] hover:bg-[#094B2E] text-white rounded-lg font-bold text-[11px] transition cursor-pointer"
-                            >
-                              Accept &amp; Generate Escrow Order
-                            </button>
-                          )}
+                          <p className="text-[10px] opacity-75">
+                            This quote does not create an order or process payment. Use an active marketplace listing to submit an order request.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -294,7 +290,7 @@ export const MessagingCenter: React.FC<MessagingCenterProps> = ({
             {/* Offline notification badge in chat */}
             {!isOnline && (
               <div className="px-4 py-1.5 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-800 flex items-center justify-between">
-                <span>Working offline: message will be delivered once network re-establishes.</span>
+                <span>Offline messages are stored on this device only and are not delivered or synced automatically.</span>
               </div>
             )}
 

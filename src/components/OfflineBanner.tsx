@@ -38,7 +38,7 @@ export const OfflineBanner: React.FC<OfflineBannerProps> = ({
             </span>
             <WifiOff className="w-4 h-4 text-amber-800" />
             <span>
-              <strong>Rural Offline Mode Active:</strong> You can continue updating harvest stock, managing listings, and composing trade offers. Changes are cached locally on this device.
+              <strong>Network unavailable:</strong> Shared data actions may fail. Local inventory drafts stay on this device and are not synchronized automatically.
             </span>
           </>
         ) : queue.length > 0 ? (

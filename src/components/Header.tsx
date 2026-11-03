@@ -97,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={onOpenCart}
-              aria-label={`Open escrow cart${cartCount > 0 ? `, ${cartCount} items` : ''}`}
+              aria-label={`Open order cart${cartCount > 0 ? `, ${cartCount} items` : ''}`}
               className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white transition duration-200 hover:-translate-y-0.5 hover:bg-white/10 active:translate-y-0"
             >
               <ShoppingBag className="h-4 w-4 text-[#F7B500]" />

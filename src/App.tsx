@@ -20,8 +20,8 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { authConfigured, supabase } from './services/supabase';
 import { BackendOrder, marketplaceBackend } from './services/marketplaceBackend';
 import { adminBackend } from './services/adminBackend';
-import { CropItem, InventoryBatch, CartItem, EscrowTransaction, ShipmentTracking, ChatThread, ChatMessage } from './types';
-import { MapPin, Phone, Mail, ShieldCheck, Heart } from 'lucide-react';
+import { CropItem, InventoryBatch, CartItem, ShipmentTracking, ChatThread, ChatMessage } from './types';
+import { businessInformation } from './config/business';
 
 const TAB_PATHS: Record<AppTab, string> = {
   marketplace: '/marketplace',
@@ -107,7 +107,7 @@ export default function App() {
       farmer: 'Farmer Hub',
       tracking: 'Shipment Tracking',
       messages: 'Direct Trade',
-      escrow: 'Escrow Vault',
+      escrow: 'Orders',
       admin: 'Admin',
       'sign-in': 'Sign in',
       'sign-up': 'Create account',
@@ -121,7 +121,6 @@ export default function App() {
   const [inventory, setInventory] = useState<InventoryBatch[]>(() => authConfigured ? [] : storageService.getInventory());
   const [cart, setCart] = useState<CartItem[]>(() => storageService.getCart());
   const [shipments, setShipments] = useState<ShipmentTracking[]>(() => authConfigured ? [] : storageService.getShipments());
-  const [escrowTransactions, setEscrowTransactions] = useState<EscrowTransaction[]>(() => authConfigured ? [] : storageService.getEscrowTransactions());
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => authConfigured ? [] : storageService.getChatThreads());
   const [orders, setOrders] = useState<BackendOrder[]>([]);
   const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>(() => storageService.getOfflineQueue());
@@ -129,7 +128,7 @@ export default function App() {
   // UI state
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
-  const [selectedTrackingWaybill, setSelectedTrackingWaybill] = useState<string>('AGRO-TRK-88294');
+  const [selectedTrackingWaybill, setSelectedTrackingWaybill] = useState<string>('');
   const [activeChatThreadId, setActiveChatThreadId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -149,7 +148,6 @@ export default function App() {
           setInventory([]);
           setChatThreads([]);
           setShipments([]);
-          setEscrowTransactions([]);
           setOrders([]);
           return;
         }
@@ -206,7 +204,21 @@ export default function App() {
   }, [inventory]);
 
   // Cart operations
-  const handleAddToCart = (crop: CropItem, tonnes: number) => {
+  const handleAddToCart = (crop: CropItem, tonnes: number): boolean => {
+    const existing = cart.find((item) => item.crop.id === crop.id);
+    const nextQuantity = (existing?.quantityTonnes ?? 0) + tonnes;
+    if (
+      !Number.isFinite(tonnes) ||
+      tonnes <= 0 ||
+      nextQuantity < crop.minimumOrderTonnes
+    ) {
+      showToast(`The minimum order for ${crop.name} is ${crop.minimumOrderTonnes} MT.`);
+      return false;
+    }
+    if (nextQuantity > crop.availableStockTonnes) {
+      showToast(`Only ${crop.availableStockTonnes} MT of ${crop.name} is available.`);
+      return false;
+    }
     setCart((prev) => {
       const existing = prev.find((i) => i.crop.id === crop.id);
       if (existing) {
@@ -216,11 +228,19 @@ export default function App() {
       }
       return [...prev, { crop, quantityTonnes: tonnes }];
     });
+    return true;
   };
 
   const handleUpdateCartQuantity = (cropId: string, quantity: number) => {
     if (quantity <= 0) {
       handleRemoveCartItem(cropId);
+      return;
+    }
+    const item = cart.find(({ crop }) => crop.id === cropId);
+    if (!item || quantity < item.crop.minimumOrderTonnes || quantity > item.crop.availableStockTonnes) {
+      showToast(item
+        ? `Order quantity must be between ${item.crop.minimumOrderTonnes} and ${item.crop.availableStockTonnes} MT.`
+        : 'That listing is no longer available in the cart.');
       return;
     }
     setCart((prev) =>
@@ -265,7 +285,7 @@ export default function App() {
         description: `Added harvest lot ${newBatch.lotNumber} (${newBatch.quantityTonnes} MT ${newBatch.cropName})`,
       });
       setOfflineQueue(storageService.getOfflineQueue());
-      showToast(`Batch saved locally on device. Queued for sync when online.`);
+      showToast('Batch saved on this device only. It will not sync automatically.');
     } else {
       showToast(`Harvest lot ${newBatch.lotNumber} saved on this device.`);
     }
@@ -335,15 +355,6 @@ export default function App() {
     showToast(`Batch removed.`);
   };
 
-  const handleReleaseEscrow = (txId: string) => {
-    const updated = escrowTransactions.map((tx) =>
-      tx.id === txId ? { ...tx, escrowStatus: 'Released to Farmer' as const } : tx
-    );
-    setEscrowTransactions(updated);
-    storageService.saveEscrowTransactions(updated);
-    showToast('Local escrow status updated. No funds were transferred.');
-  };
-
   // Messaging operations
   const handleSendMessage = async (threadId: string, text: string, proposal?: ChatMessage['proposal']) => {
     if (supabase) {
@@ -403,7 +414,7 @@ export default function App() {
         return;
       }
       if (!crop.sellerId) {
-        showToast('This sample listing is not connected to a producer account.');
+        showToast('This listing is not connected to a producer account.');
         return;
       }
       try {
@@ -417,22 +428,7 @@ export default function App() {
       return;
     }
 
-    let thread = chatThreads.find((t) => t.contactName.toLowerCase().includes(crop.farmerName.toLowerCase()));
-    if (!thread) {
-      thread = chatThreads[0];
-    }
-    setActiveChatThreadId(thread.id);
-    setActiveTab('messages');
-  };
-
-  const handleAcceptProposal = (proposal: NonNullable<ChatMessage['proposal']>) => {
-    const crop = crops.find((c) => c.name.toLowerCase().includes(proposal.cropName.toLowerCase())) || crops[0];
-    if (!crop) {
-      showToast('No matching live listing is available for this proposal.');
-      return;
-    }
-    handleAddToCart(crop, proposal.tonnes);
-    setIsCartOpen(true);
+    showToast('Producer messaging requires the shared Supabase service to be configured.');
   };
 
   const handleOpenTrackingWaybill = (waybill: string) => {
@@ -600,7 +596,7 @@ export default function App() {
         isOnline={isOnline}
         isSimulated={isSimulated}
         onToggleSimulated={toggleSimulatedOffline}
-        unreadCount={1}
+        unreadCount={chatThreads.reduce((total, thread) => total + thread.unreadCount, 0)}
         userEmail={userEmail}
         showAdminLink={isAdmin}
         onSignOut={async () => {
@@ -643,12 +639,12 @@ export default function App() {
         {activeTab === 'farmer' && (
           <FarmerDashboard
             inventory={inventory}
+            orders={orders}
             onAddBatch={handleAddBatch}
             onUpdateBatch={handleUpdateBatch}
             onDeleteBatch={handleDeleteBatch}
             isOnline={isOnline}
             isShared={Boolean(supabase)}
-            onOpenTracking={handleOpenTrackingWaybill}
           />
         )}
 
@@ -657,7 +653,7 @@ export default function App() {
             shipments={shipments}
             selectedTrackingNumber={selectedTrackingWaybill}
             onUpdateShipment={handleUpdateShipment}
-            allowSimulation={!supabase}
+            isShared={Boolean(supabase)}
           />
         )}
 
@@ -668,18 +664,15 @@ export default function App() {
             onSendMessage={handleSendMessage}
             isOnline={isOnline}
             isShared={Boolean(supabase)}
-            onAcceptProposal={handleAcceptProposal}
           />
         )}
 
         {activeTab === 'escrow' && (
           <EscrowVaultView
-            transactions={escrowTransactions}
-            onOpenTracking={handleOpenTrackingWaybill}
-            onReleaseEscrow={handleReleaseEscrow}
             orders={orders}
             currentUserId={userId}
-            onUpdateOrderStatus={supabase ? handleUpdateOrderStatus : undefined}
+            isShared={Boolean(supabase && userId)}
+            onUpdateOrderStatus={handleUpdateOrderStatus}
             onCreateShipment={supabase ? handleCreateShipment : undefined}
           />
         )}
@@ -716,12 +709,11 @@ export default function App() {
                 />
               </div>
               <p className="text-stone-300 text-xs leading-relaxed max-w-sm">
-                Empowering smallholder farmers, advancing food sovereignty, and transforming agricultural commerce across Africa through technology, direct escrow, and sustainable value-added production.
+                Review agricultural listings, contact producers, and submit order requests.
               </p>
-              <div className="pt-1 flex items-center gap-2 text-[#F7B500] font-semibold text-xs">
-                <Heart className="w-4 h-4 fill-current text-[#F7B500]" />
-                <span>Agricultural Trade, Rooted in Trust</span>
-              </div>
+              <p className="pt-1 text-xs text-stone-300">
+                Orders are requests only. Payments and escrow are not connected.
+              </p>
             </div>
 
             {/* Quick Links */}
@@ -732,7 +724,7 @@ export default function App() {
                 <li><button onClick={() => setActiveTab('farmer')} className="hover:text-white transition">Farmer Hub</button></li>
                 <li><button onClick={() => setActiveTab('tracking')} className="hover:text-white transition">Shipment Tracking</button></li>
                 <li><button onClick={() => setActiveTab('messages')} className="hover:text-white transition">Direct Trade Chat</button></li>
-                <li><button onClick={() => setActiveTab('escrow')} className="hover:text-white transition">AgroEscrow™ Vault</button></li>
+                <li><button onClick={() => setActiveTab('escrow')} className="hover:text-white transition">Order requests</button></li>
               </ul>
             </div>
 
@@ -748,33 +740,26 @@ export default function App() {
               </ul>
             </div>
 
-            {/* Regional Hubs & Contact */}
+            {/* Business contact details */}
             <div className="md:col-span-3 space-y-2 text-stone-300">
-              <h4 className="font-bold text-white uppercase tracking-wider text-[11px] text-[#48B749]">Hub Locations</h4>
-              <p className="flex items-start gap-1.5">
-                <MapPin className="w-4 h-4 text-[#F7B500] shrink-0 mt-0.5" />
-                <span>Kasunya Farm Station, Greater Accra & Rift Valley Agricultural Hub</span>
+              <h4 className="font-bold text-white uppercase tracking-wider text-[11px] text-[#48B749]">Contact</h4>
+              <p>{businessInformation.address || 'Business address to be confirmed.'}</p>
+              <p>
+                {businessInformation.email
+                  ? <a href={`mailto:${businessInformation.email}`} className="hover:text-white">{businessInformation.email}</a>
+                  : 'Official email to be confirmed.'}
               </p>
-              <p className="flex items-center gap-1.5 pt-1">
-                <Mail className="w-4 h-4 text-[#F7B500] shrink-0" />
-                <span>trade@agroline-agrikings.com</span>
-              </p>
-              <p className="flex items-center gap-1.5">
-                <Phone className="w-4 h-4 text-[#F7B500] shrink-0" />
-                <span>+254 712 884 920 / +233 24 551 9022</span>
+              <p>
+                {businessInformation.telephone
+                  ? <a href={`tel:${businessInformation.telephone}`} className="hover:text-white">{businessInformation.telephone}</a>
+                  : 'Official telephone to be confirmed.'}
               </p>
             </div>
           </div>
 
           <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-stone-400">
             <p>© {new Date().getFullYear()} Agroline Ltd. All rights reserved.</p>
-            <div className="flex items-center gap-4">
-              <span>Privacy Policy</span>
-              <span>·</span>
-              <span>Terms of Trade</span>
-              <span>·</span>
-              <span>Escrow Protection</span>
-            </div>
+            <p>Legal policies will be published when finalized.</p>
           </div>
         </div>
       </footer>

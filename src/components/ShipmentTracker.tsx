@@ -1,24 +1,25 @@
 import React, { useState } from 'react';
-import { Search, Truck, MapPin, Thermometer, Droplets, Clock, Phone, ShieldCheck, CheckCircle2, AlertTriangle, ArrowRight, Radio } from 'lucide-react';
+import { Search, Truck, MapPin, Thermometer, Droplets, Clock, Phone, ShieldCheck, CheckCircle2, AlertTriangle, Radio } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShipmentTracking } from '../types';
+import logisticsImage from '../assets/images/logistics_agro_transport_1793303357624.jpg';
 
 interface ShipmentTrackerProps {
   shipments: ShipmentTracking[];
   selectedTrackingNumber?: string;
   onUpdateShipment: (updated: ShipmentTracking) => void;
-  allowSimulation?: boolean;
+  isShared?: boolean;
 }
 
 export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
   shipments,
   selectedTrackingNumber,
   onUpdateShipment,
-  allowSimulation = true,
+  isShared = false,
 }) => {
-  const [searchQuery, setSearchQuery] = useState(selectedTrackingNumber || 'AGRO-TRK-88294');
+  const [searchQuery, setSearchQuery] = useState(selectedTrackingNumber || '');
   const [activeShipmentId, setActiveShipmentId] = useState<string>(
-    selectedTrackingNumber || (shipments[0]?.trackingNumber || 'AGRO-TRK-88294')
+    selectedTrackingNumber || shipments[0]?.trackingNumber || ''
   );
 
   const [notFoundNotice, setNotFoundNotice] = useState<string | null>(null);
@@ -27,8 +28,7 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
   const [shipmentNotes, setShipmentNotes] = useState('');
 
   const currentShipment =
-    shipments.find((s) => s.trackingNumber.toUpperCase() === activeShipmentId.toUpperCase()) ||
-    shipments[0];
+    shipments.find((s) => s.trackingNumber.toUpperCase() === activeShipmentId.toUpperCase());
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,31 +39,10 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
       setActiveShipmentId(found.trackingNumber);
       setNotFoundNotice(null);
     } else {
-      setNotFoundNotice(`Waybill "${searchQuery}" not found. Displaying active consignment.`);
+      setActiveShipmentId('');
+      setNotFoundNotice(`No shipment record was found for "${searchQuery.trim()}".`);
       setTimeout(() => setNotFoundNotice(null), 4000);
     }
-  };
-
-  const handleStepProgress = () => {
-    if (!currentShipment) return;
-    const nextPercentage = Math.min(100, currentShipment.progressPercentage + 15);
-    const updated: ShipmentTracking = {
-      ...currentShipment,
-      progressPercentage: nextPercentage,
-      status:
-        nextPercentage >= 100
-          ? 'Delivery Confirmed'
-          : nextPercentage >= 85
-          ? 'Arrived at Destination'
-          : 'In Regional Transit',
-      checkpoints: currentShipment.checkpoints.map((cp, idx) => {
-        if (nextPercentage >= 80 && idx === 3) {
-          return { ...cp, completed: true, status: 'Offloading Complete & Buyer Signed' };
-        }
-        return cp;
-      }),
-    };
-    onUpdateShipment(updated);
   };
 
   const handleSaveShipmentUpdate = (event: React.FormEvent<HTMLFormElement>) => {
@@ -104,13 +83,13 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
                 <Radio className="w-3.5 h-3.5 text-[#0D5C3A]" />
                 <span>Shipment Status</span>
                 <span aria-hidden="true">·</span>
-                <span>{allowSimulation ? 'Stored Records' : 'Shared Records'}</span>
+                <span>{isShared ? 'Shared Records' : 'Local Records'}</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-stone-900">
                 Shipment Tracking · Consignment Status
               </h1>
               <p className="text-xs sm:text-sm text-stone-600 mt-1">
-                {allowSimulation ? 'Review shipment details saved in this browser. Carrier location and sensor feeds are not connected.' : 'Review shipment records stored in Supabase. Carrier location and sensor feeds are not connected.'}
+                {isShared ? 'Review shipment records stored in Supabase. Carrier location and sensor feeds are not connected.' : 'Review shipment details saved in this browser. Carrier location and sensor feeds are not connected.'}
               </p>
             </div>
 
@@ -143,7 +122,8 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
                 <input
                   type="text"
-                  placeholder="Enter Agroline Consignment Waybill (e.g. AGRO-TRK-88294)..."
+                  required
+                  placeholder="Enter a tracking number"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#0D5C3A]"
@@ -180,8 +160,8 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
           <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-xs">
             <div className="relative h-52 sm:h-64 bg-stone-900 overflow-hidden">
               <img
-                src="/src/assets/images/logistics_agro_transport_1793303357624.jpg"
-                alt="Agroline Freight Transport Fleet"
+                src={logisticsImage}
+                alt="Agricultural freight transport"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover opacity-85 transition-transform duration-700 hover:scale-103"
               />
@@ -197,7 +177,7 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
                   <p className="text-xs text-stone-300 mt-0.5">Order Ref: {currentShipment.orderId}</p>
                 </div>
                 <div className="text-right">
-                    <span className="text-xs text-stone-300 block font-semibold">{allowSimulation ? 'Stored shipment status' : 'Shared shipment status'}</span>
+                    <span className="text-xs text-stone-300 block font-semibold">{isShared ? 'Shared shipment status' : 'Locally stored shipment status'}</span>
                   <span className="text-sm sm:text-base font-bold text-emerald-400 flex items-center justify-end gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                     <span>{currentShipment.status}</span>
@@ -211,7 +191,7 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
               <div className="p-4 flex items-center gap-3">
                 <Thermometer className="w-5 h-5 text-amber-700 shrink-0" />
                 <div>
-                  <span className="text-stone-600 block text-xs font-medium">Sample cargo temperature</span>
+                  <span className="text-stone-600 block text-xs font-medium">Cargo temperature</span>
                   <span className="font-extrabold text-stone-900 text-sm tabular-nums">
                     {currentShipment.currentTempCelsius === null ? 'Not reported' : `${currentShipment.currentTempCelsius}°C`}
                   </span>
@@ -221,7 +201,7 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
               <div className="p-4 flex items-center gap-3">
                 <Droplets className="w-5 h-5 text-sky-700 shrink-0" />
                 <div>
-                  <span className="text-stone-600 block text-xs font-medium">Sample humidity</span>
+                  <span className="text-stone-600 block text-xs font-medium">Cargo humidity</span>
                   <span className="font-extrabold text-stone-900 text-sm tabular-nums">
                     {currentShipment.currentHumidity === null ? 'Not reported' : `${currentShipment.currentHumidity}% RH`}
                   </span>
@@ -231,9 +211,9 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
               <div className="p-4 flex items-center gap-3">
                 <Clock className="w-5 h-5 text-[#0D5C3A] shrink-0" />
                 <div>
-                  <span className="text-stone-600 block text-xs font-medium">Example arrival estimate</span>
+                  <span className="text-stone-600 block text-xs font-medium">Seller-provided arrival estimate</span>
                   <span className="font-extrabold text-stone-900 text-xs sm:text-sm truncate block">
-                    {currentShipment.estimatedArrival}
+                    {currentShipment.estimatedArrival || 'Not provided'}
                   </span>
                 </div>
               </div>
@@ -291,7 +271,7 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
               {/* Progress Bar with Animated Width */}
               <div>
                 <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="font-bold text-stone-800">Sample route progress</span>
+                  <span className="font-bold text-stone-800">Recorded shipment progress</span>
                   <span className="font-extrabold text-[#0D5C3A] tabular-nums text-sm">{currentShipment.progressPercentage}% Completed</span>
                 </div>
                 <div className="w-full bg-stone-200 h-3 rounded-full overflow-hidden p-0.5">
@@ -307,7 +287,7 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
               {/* Checkpoint Timeline with Animated Checkmarks */}
               <div className="pt-2">
                 <h3 className="text-sm font-extrabold font-display text-stone-900 mb-4">
-                  Consignment Milestones &amp; Escrow Sign-Offs
+                  Shipment events
                 </h3>
 
                 <div className="space-y-4">
@@ -352,21 +332,9 @@ export const ShipmentTracker: React.FC<ShipmentTrackerProps> = ({
               <div className="pt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-stone-200">
                 <div className="flex items-center gap-1.5 text-xs text-stone-500 font-medium">
                   <ShieldCheck className="w-4 h-4 text-[#0D5C3A]" />
-                  <span>{allowSimulation ? 'Changing status only updates this browser’s sample record.' : 'Shipment updates are entered by the seller; no carrier integration is connected.'}</span>
+                  <span>Shipment updates are entered by the user; no carrier integration is connected.</span>
                 </div>
-                {allowSimulation && (
-                  <motion.button
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={handleStepProgress}
-                    disabled={currentShipment.progressPercentage >= 100}
-                    className="px-4 py-2 bg-[#0D5C3A] hover:bg-[#094B2E] text-white rounded-xl text-xs font-bold transition disabled:opacity-50 flex items-center gap-2 shadow-sm cursor-pointer"
-                  >
-                    <span>Advance sample route</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#F7B500]" />
-                  </motion.button>
-                )}
-                {!allowSimulation && currentShipment.canUpdate && (
+                {(!isShared || currentShipment.canUpdate) && (
                   <form onSubmit={handleSaveShipmentUpdate} className="grid w-full gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 sm:grid-cols-3">
                     <input required value={shipmentStatus} onChange={(event) => setShipmentStatus(event.target.value)} placeholder="New shipment status" className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs" />
                     <input value={shipmentLocation} onChange={(event) => setShipmentLocation(event.target.value)} placeholder="Current location" className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs" />

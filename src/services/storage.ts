@@ -1,15 +1,34 @@
-import { CropItem, InventoryBatch, CartItem, EscrowTransaction, ShipmentTracking, ChatThread } from '../types';
-import { INITIAL_CROPS, INITIAL_FARMER_INVENTORY, INITIAL_ESCROW_TRANSACTIONS, INITIAL_SHIPMENTS, INITIAL_CHAT_THREADS } from '../data/mockData';
+import { CropItem, InventoryBatch, CartItem, ShipmentTracking, ChatThread } from '../types';
 
 const KEYS = {
   CROPS: 'agroline_crops_v5',
   INVENTORY: 'agroline_farmer_inventory_v4',
-  CART: 'agroline_cart_v4',
-  ESCROW: 'agroline_escrow_v4',
+  CART: 'agroline_cart_v5',
   SHIPMENTS: 'agroline_shipments_v4',
   THREADS: 'agroline_chat_threads_v4',
   OFFLINE_QUEUE: 'agroline_offline_queue_v4',
   SIMULATED_OFFLINE: 'agroline_simulated_offline_v4',
+};
+
+const readStoredArray = <T,>(key: string, excludedIds: readonly string[] = []): T[] => {
+  try {
+    const data = localStorage.getItem(key);
+    if (!data) return [];
+    const parsed: unknown = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    const excluded = new Set(excludedIds);
+    return parsed.filter((item): item is T => {
+      if (typeof item !== 'object' || item === null) return false;
+      const id = 'id' in item && typeof item.id === 'string' ? item.id : '';
+      const trackingNumber = 'trackingNumber' in item && typeof item.trackingNumber === 'string'
+        ? item.trackingNumber
+        : '';
+      return !excluded.has(id) && !excluded.has(trackingNumber);
+    });
+  } catch (error) {
+    console.error(`Could not read saved ${key} data.`, error);
+    return [];
+  }
 };
 
 export interface OfflineAction {
@@ -23,22 +42,15 @@ export interface OfflineAction {
 export const storageService = {
   // Crops
   getCrops(): CropItem[] {
-    try {
-      const data = localStorage.getItem(KEYS.CROPS);
-      if (!data) {
-        localStorage.setItem(KEYS.CROPS, JSON.stringify(INITIAL_CROPS));
-        return INITIAL_CROPS;
-      }
-      const parsed = JSON.parse(data);
-      // Ensure valid crops with real images
-      if (!Array.isArray(parsed) || parsed.length === 0 || parsed[0].image.includes('/assets/commodities/')) {
-        localStorage.setItem(KEYS.CROPS, JSON.stringify(INITIAL_CROPS));
-        return INITIAL_CROPS;
-      }
-      return parsed;
-    } catch {
-      return INITIAL_CROPS;
-    }
+    return readStoredArray<CropItem>(KEYS.CROPS, [
+      'crop-flagship-rice',
+      'crop-1',
+      'crop-2',
+      'crop-3',
+      'crop-4',
+      'crop-5',
+      'crop-6',
+    ]);
   },
 
   saveCrops(crops: CropItem[]): void {
@@ -51,16 +63,13 @@ export const storageService = {
 
   // Farmer Inventory
   getInventory(): InventoryBatch[] {
-    try {
-      const data = localStorage.getItem(KEYS.INVENTORY);
-      if (!data) {
-        localStorage.setItem(KEYS.INVENTORY, JSON.stringify(INITIAL_FARMER_INVENTORY));
-        return INITIAL_FARMER_INVENTORY;
-      }
-      return JSON.parse(data);
-    } catch {
-      return INITIAL_FARMER_INVENTORY;
-    }
+    return readStoredArray<InventoryBatch>(KEYS.INVENTORY, [
+      'batch-rice-01',
+      'batch-01',
+      'batch-02',
+      'batch-03',
+      'batch-04',
+    ]);
   },
 
   saveInventory(inventory: InventoryBatch[]): void {
@@ -73,12 +82,7 @@ export const storageService = {
 
   // Cart
   getCart(): CartItem[] {
-    try {
-      const data = localStorage.getItem(KEYS.CART);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
+    return readStoredArray<CartItem>(KEYS.CART);
   },
 
   saveCart(cart: CartItem[]): void {
@@ -89,40 +93,13 @@ export const storageService = {
     }
   },
 
-  // Escrow
-  getEscrowTransactions(): EscrowTransaction[] {
-    try {
-      const data = localStorage.getItem(KEYS.ESCROW);
-      if (!data) {
-        localStorage.setItem(KEYS.ESCROW, JSON.stringify(INITIAL_ESCROW_TRANSACTIONS));
-        return INITIAL_ESCROW_TRANSACTIONS;
-      }
-      return JSON.parse(data);
-    } catch {
-      return INITIAL_ESCROW_TRANSACTIONS;
-    }
-  },
-
-  saveEscrowTransactions(txs: EscrowTransaction[]): void {
-    try {
-      localStorage.setItem(KEYS.ESCROW, JSON.stringify(txs));
-    } catch (e) {
-      console.error('Storage error', e);
-    }
-  },
-
   // Shipments
   getShipments(): ShipmentTracking[] {
-    try {
-      const data = localStorage.getItem(KEYS.SHIPMENTS);
-      if (!data) {
-        localStorage.setItem(KEYS.SHIPMENTS, JSON.stringify(INITIAL_SHIPMENTS));
-        return INITIAL_SHIPMENTS;
-      }
-      return JSON.parse(data);
-    } catch {
-      return INITIAL_SHIPMENTS;
-    }
+    return readStoredArray<ShipmentTracking>(KEYS.SHIPMENTS, [
+      'AGRO-TRK-88294',
+      'AGRO-TRK-77312',
+      'AGRO-TRK-66104',
+    ]);
   },
 
   saveShipments(shipments: ShipmentTracking[]): void {
@@ -135,16 +112,11 @@ export const storageService = {
 
   // Chat Threads
   getChatThreads(): ChatThread[] {
-    try {
-      const data = localStorage.getItem(KEYS.THREADS);
-      if (!data) {
-        localStorage.setItem(KEYS.THREADS, JSON.stringify(INITIAL_CHAT_THREADS));
-        return INITIAL_CHAT_THREADS;
-      }
-      return JSON.parse(data);
-    } catch {
-      return INITIAL_CHAT_THREADS;
-    }
+    return readStoredArray<ChatThread>(KEYS.THREADS, [
+      'thread-1',
+      'thread-2',
+      'thread-3',
+    ]);
   },
 
   saveChatThreads(threads: ChatThread[]): void {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, X } from 'lucide-react';
+import { FileText, Info, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CartItem } from '../types';
 
@@ -24,8 +24,8 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
   isAuthenticated,
   isSubmitting,
 }) => {
-  const [buyerOrganization, setBuyerOrganization] = useState('Millstream Flour Mills Ltd');
-  const [deliveryAddress, setDeliveryAddress] = useState('Silo 2, Industrial Area, Commercial Road');
+  const [buyerOrganization, setBuyerOrganization] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
 
   if (!isOpen) return null;
 
@@ -33,10 +33,6 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
     (sum, item) => sum + item.crop.pricePerTonne * item.quantityTonnes,
     0
   );
-  const totalTonnes = cart.reduce((sum, item) => sum + item.quantityTonnes, 0);
-  const haulageDeposit = totalTonnes * 16; // $16 per MT transport base
-  const escrowFee = Math.round(subtotal * 0.012); // 1.2% escrow fee
-  const grandTotal = subtotal + haulageDeposit + escrowFee;
   const sellerIds = new Set(cart.map(({ crop }) => crop.sellerId).filter(Boolean));
   const canSubmit = isAuthenticated && !isSubmitting && sellerIds.size === 1 && cart.every(({ crop }) => Boolean(crop.sellerId));
 
@@ -53,11 +49,11 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
         <div className="p-5 border-b border-stone-200 bg-stone-50/70 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#004D25] text-[#E69500] flex items-center justify-center shadow-xs">
-              <ShieldCheck className="w-5 h-5" />
+              <FileText className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-bold font-display text-stone-900">
-                Escrow Checkout
+                Order request
               </h2>
               <p className="text-xs text-stone-500">
                 Payment processing is not connected. No funds are transferred.
@@ -75,8 +71,8 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
         {cart.length === 0 ? (
           /* Empty Cart State */
           <div className="p-12 text-center space-y-4">
-            <p className="text-sm font-bold text-stone-700 font-display">Your Escrow Cart is currently empty</p>
-            <p className="text-sm text-stone-600">Explore sample crop listings to preview the wholesale order workflow.</p>
+            <p className="text-sm font-bold text-stone-700 font-display">Your order cart is empty</p>
+            <p className="text-sm text-stone-600">Browse active producer listings to start an order request.</p>
             <button
               onClick={onClose}
               className="px-5 py-2 text-xs font-bold text-white bg-[#004D25] rounded-xl hover:bg-[#00381B]"
@@ -85,7 +81,7 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
             </button>
           </div>
         ) : (
-          /* Checkout & Payment Gateway Form */
+          /* Order request form */
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -116,8 +112,9 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
                           type="number"
                           min={item.crop.minimumOrderTonnes}
                           max={item.crop.availableStockTonnes}
+                          step="0.01"
                           value={item.quantityTonnes}
-                          onChange={(e) => onUpdateQuantity(item.crop.id, parseInt(e.target.value) || item.crop.minimumOrderTonnes)}
+                          onChange={(e) => onUpdateQuantity(item.crop.id, parseFloat(e.target.value) || item.crop.minimumOrderTonnes)}
                           className="w-14 text-center font-bold text-stone-900 tabular-nums focus:outline-none"
                         />
                         <span className="text-[11px] text-stone-500 font-medium">MT</span>
@@ -140,6 +137,12 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
                 ))}
               </div>
             </div>
+
+            {sellerIds.size > 1 && (
+              <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                Submit one order request per producer. Remove listings from other producers to continue.
+              </p>
+            )}
 
             {/* Buyer Delivery & Organization Information */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -166,39 +169,27 @@ export const EscrowPaymentModal: React.FC<EscrowPaymentModalProps> = ({
             </div>
 
               <div role="status" className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-stone-800">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-800" />
+                <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-800" />
                 <div>
                   <p className="font-bold">Order request only — payment is not connected</p>
                   <p className="mt-1 text-stone-700">Submitting records a pending order and reserves the listed stock. It does not authorize, charge, or hold funds.</p>
                 </div>
               </div>
 
-            {/* Escrow Fee & Cost Summary */}
+            {/* Order estimate */}
             <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200 space-y-2 text-xs">
               <div className="flex justify-between text-stone-600">
-                <span>Commodities Value ({totalTonnes} MT)</span>
+                <span>Estimated product subtotal</span>
                 <span className="tabular-nums font-bold text-stone-900">${subtotal.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-stone-600">
-                <span>Estimated freight (illustrative)</span>
-                <span className="tabular-nums font-bold text-stone-900">${haulageDeposit.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-stone-600">
-                <span>Estimated service fee (illustrative)</span>
-                <span className="tabular-nums font-bold text-stone-900">${escrowFee.toLocaleString()}</span>
-              </div>
-              <div className="pt-2 border-t border-stone-200 flex justify-between text-sm font-bold text-stone-900">
-                <span>Illustrative total</span>
-                <span className="text-xl text-[#004D25] font-display tabular-nums font-extrabold">
-                  ${grandTotal.toLocaleString()}
-                </span>
-              </div>
+              <p className="pt-2 border-t border-stone-200 text-stone-600">
+                Freight, taxes, and payment are not calculated or collected by this site.
+              </p>
             </div>
 
             <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-700 flex items-start gap-2">
-              <Lock className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
               <div>
-                <strong>Payment status:</strong> No funds will be moved by this page. Connect a payment provider before enabling checkout.
+                <strong>Payment:</strong> Not collected here. Agree payment and delivery terms directly with the producer.
               </div>
             </div>
 

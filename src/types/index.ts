@@ -44,23 +44,6 @@ export interface CartItem {
   quantityTonnes: number;
 }
 
-export type PaymentMethod = 'mpesa' | 'card' | 'bank_transfer' | 'agro_credit';
-
-export interface EscrowTransaction {
-  id: string;
-  orderNumber: string;
-  cropName: string;
-  quantityTonnes: number;
-  totalAmount: number;
-  buyerName: string;
-  sellerName: string;
-  paymentMethod: PaymentMethod;
-  escrowStatus: 'Held in Escrow' | 'Dispatched' | 'Inspected & Approved' | 'Released to Farmer';
-  trackingNumber: string;
-  createdAt: string;
-  releaseDateEstimate: string;
-}
-
 export interface ShipmentCheckpoint {
   time: string;
   location: string;

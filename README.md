@@ -39,6 +39,8 @@ The ordered migrations in [`supabase/migrations/`](./supabase/migrations/) creat
 
 After applying the migration, sign in with a user account. Marketplace listings will show inventory published by users; producers can add and manage their own inventory. Signed-in buyers can start listing-specific conversations and submit order requests. Sellers can accept or decline pending requests, and buyers can cancel pending requests. Order requests reserve stock until the seller declines or the buyer cancels.
 
+The app does not seed fictional listings, producers, orders, or shipment records. Without Supabase, marketplace, messaging, and order data are unavailable; inventory drafts saved in that mode remain only in the current browser and are not synchronized.
+
 The admin console is available at `/admin` to users explicitly assigned the `admin` database role. To grant access, first create the account and confirm it appears in **Authentication → Users**, then run this in the Supabase SQL Editor, replacing the email with the trusted account:
 
 ```sql
@@ -59,9 +61,11 @@ where role = 'admin'
 
 The admin page provides account-directory review, listing hide/restore moderation, and order status management. It does not suspend or delete Supabase Auth users; perform account-level actions from Supabase Dashboard. Admin role changes are deliberately done in SQL, not from the browser. The role table cannot be edited by frontend users, and every admin data function checks the database role.
 
-Checkout records an order request only. There is no payment provider, escrow, carrier tracking feed, or sensor integration connected. After accepting an order, the seller can add a shipment record from the shared order panel; real-time carrier status updates are not connected. Existing browser sample records are not uploaded or treated as real orders.
+Checkout records an order request only. There is no payment provider, escrow, carrier tracking feed, or sensor integration connected. After accepting an order, the seller can add a shipment record from the shared order panel; real-time carrier status updates are not connected.
 
-If Supabase is configured but its migration has not been applied, shared-data requests will report an error rather than falling back to private browser samples. Never put a service-role or secret key in a `VITE_` variable. Account metadata such as buyer/producer selection is not an authorization boundary; database row-level security and server-side checks enforce access.
+Official company contact details are maintained in [`src/config/business.ts`](./src/config/business.ts). Update that file only with verified company email, telephone, and address information; blank values are intentionally shown as “to be confirmed.”
+
+If Supabase is configured but its migration has not been applied, shared-data requests will report an error rather than falling back to local-only data. Never put a service-role or secret key in a `VITE_` variable. Account metadata such as buyer/producer selection is not an authorization boundary; database row-level security and server-side checks enforce access.
 
 ## Deploy to Netlify
 

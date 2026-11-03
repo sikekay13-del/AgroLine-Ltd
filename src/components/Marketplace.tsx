@@ -1,31 +1,21 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Search, SlidersHorizontal, MapPin, ShieldCheck, MessageSquare, Plus, Check, ArrowRight, Award, Sparkles, CheckCircle2, Volume2, VolumeX, ChevronRight, Package, Truck, Lock, ArrowUpRight, FileCheck2, Beaker, Globe, RefreshCw } from 'lucide-react';
+import { Search, SlidersHorizontal, MapPin, MessageSquare, Plus, Check, ArrowRight, Volume2, VolumeX, ChevronRight, Sparkles, ShieldCheck, CheckCircle2, Truck, FileCheck2, Package } from 'lucide-react';
 import { motion, AnimatePresence, MotionConfig, useReducedMotion } from 'motion/react';
 import { CropItem, CropCategory } from '../types';
-import { CommodityTicker } from './CommodityTicker';
-import { TradeConfidenceGuide } from './TradeConfidenceGuide';
-import { OutgrowerSpotlight } from './OutgrowerSpotlight';
-import { LabCertificateModal } from './LabCertificateModal';
-import { SampleRequestModal } from './SampleRequestModal';
+import heroPoster from '../assets/images/hero_agriculture_harvest_1793303356367.jpg';
 
 interface MarketplaceProps {
   crops: CropItem[];
-  onAddToCart: (crop: CropItem, tonnes: number) => void;
+  onAddToCart: (crop: CropItem, tonnes: number) => boolean;
   onOpenMessage: (crop: CropItem) => void;
   onTrackWaybill: (waybill: string) => void;
   onSwitchToFarmer: () => void;
   onNavigateTab?: (tab: 'marketplace' | 'farmer' | 'tracking' | 'messages' | 'escrow') => void;
 }
 
-export type CurrencyCode = 'USD' | 'GHS' | 'KES' | 'EUR';
 export type UnitCode = 'MT' | '50kg';
 
-export const CURRENCY_CONFIG: Record<CurrencyCode, { symbol: string; rate: number; label: string }> = {
-  USD: { symbol: '$', rate: 1.0, label: 'USD ($)' },
-  GHS: { symbol: 'GH₵', rate: 15.2, label: 'GHS (GH₵)' },
-  KES: { symbol: 'KSh ', rate: 129.5, label: 'KES (KSh)' },
-  EUR: { symbol: '€', rate: 0.92, label: 'EUR (€)' },
-};
+type SortOption = 'recent' | 'price-low-high' | 'price-high-low' | 'name';
 
 export const Marketplace: React.FC<MarketplaceProps> = ({
   crops,
@@ -36,57 +26,46 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onNavigateTab,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<CropCategory | 'all'>('all');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [maxMoisture, setMaxMoisture] = useState<number>(15);
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [selectedCrop, setSelectedCrop] = useState<CropItem | null>(null);
   const [orderQuantity, setOrderQuantity] = useState<number>(5);
   const [addedToast, setAddedToast] = useState<string | null>(null);
 
-  // Multi-currency and unit preferences
-  const [currency, setCurrency] = useState<CurrencyCode>('USD');
+  // Prices are stored in USD; the sack view is a unit conversion, not another currency.
   const [unit, setUnit] = useState<UnitCode>('MT');
-
-  // Modals for Lab Inspection Certificate & 1kg Physical Sample
-  const [certModalCrop, setCertModalCrop] = useState<CropItem | null>(null);
-  const [sampleModalCrop, setSampleModalCrop] = useState<CropItem | null>(null);
 
   // Video playback
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
   const prefersReducedMotion = useReducedMotion();
-
-  // Flagship rice pack selector
-  const [selectedPackSize, setSelectedPackSize] = useState<'5kg' | '25kg' | '50kg' | '1MT'>('50kg');
+  const flagshipRice = crops[0];
 
   const formatPrice = (pricePerTonne: number) => {
-    const cfg = CURRENCY_CONFIG[currency];
     if (unit === '50kg') {
-      const bagPrice = (pricePerTonne / 20) * cfg.rate;
-      return `${cfg.symbol}${bagPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const bagPrice = pricePerTonne / 20;
+      return `$${bagPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
-    const tonnePrice = pricePerTonne * cfg.rate;
-    return `${cfg.symbol}${Math.round(tonnePrice).toLocaleString()}`;
+    return `$${Math.round(pricePerTonne).toLocaleString()}`;
   };
 
   const formatTotal = (amountUsd: number) => {
-    const cfg = CURRENCY_CONFIG[currency];
-    const converted = amountUsd * cfg.rate;
-    return `${cfg.symbol}${Math.round(converted).toLocaleString()}`;
+    return `$${Math.round(amountUsd).toLocaleString()}`;
   };
 
-  const categories = [
+  const categories: Array<{ id: CropCategory | 'all'; label: string }> = [
     { id: 'all', label: 'All Commodities' },
     { id: 'grains', label: 'Grains & Rice' },
     { id: 'legumes', label: 'Legumes & Pulses' },
     { id: 'oilseeds', label: 'Oilseeds' },
     { id: 'tubers', label: 'Tubers & Roots' },
+    { id: 'inputs', label: 'Farm Inputs' },
   ];
 
-  const flagshipRice = crops.find((c) => c.id === 'crop-flagship-rice') || crops[0];
-
   const filteredCrops = useMemo(() => {
-    return crops.filter((item) => {
+    const filtered = crops.filter((item) => {
       const matchSearch =
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -105,25 +84,27 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
       return matchSearch && matchCategory && matchGrade && matchMoisture;
     });
-  }, [crops, searchQuery, selectedCategory, selectedGrade, maxMoisture]);
+    if (sortBy === 'price-low-high') {
+      return filtered.sort((a, b) => a.pricePerTonne - b.pricePerTonne);
+    }
+    if (sortBy === 'price-high-low') {
+      return filtered.sort((a, b) => b.pricePerTonne - a.pricePerTonne);
+    }
+    if (sortBy === 'name') {
+      return filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return filtered;
+  }, [crops, searchQuery, selectedCategory, selectedGrade, maxMoisture, sortBy]);
 
   const handleQuickAdd = (crop: CropItem, tonnes?: number) => {
-    const qty = tonnes || crop.minimumOrderTonnes;
-    onAddToCart(crop, qty);
-    setAddedToast(`${qty} MT of ${crop.name} added to Escrow Cart`);
-    setTimeout(() => setAddedToast(null), 3000);
-  };
-
-  const handleAddFlagshipPack = () => {
-    if (!flagshipRice) return;
-    let tonnes = 1;
-    if (selectedPackSize === '5kg') tonnes = 0.05;
-    else if (selectedPackSize === '25kg') tonnes = 0.25;
-    else if (selectedPackSize === '50kg') tonnes = 1;
-    else if (selectedPackSize === '1MT') tonnes = 1;
-
-    onAddToCart(flagshipRice, tonnes);
-    setAddedToast(`Added ${selectedPackSize} format of Agroline Royal Aromatic Rice to Escrow Cart`);
+    const qty = tonnes ?? crop.minimumOrderTonnes;
+    if (qty < crop.minimumOrderTonnes || qty > crop.availableStockTonnes) {
+      setAddedToast(`Order quantity must be between ${crop.minimumOrderTonnes} and ${crop.availableStockTonnes} MT.`);
+      setTimeout(() => setAddedToast(null), 3000);
+      return;
+    }
+    if (!onAddToCart(crop, qty)) return;
+    setAddedToast(`${qty} MT of ${crop.name} added to your order cart`);
     setTimeout(() => setAddedToast(null), 3000);
   };
 
@@ -163,7 +144,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         <video
           ref={videoRef}
           src="/assets/aistudio/10847025-hd_1920_1080_25fps_c75dc868.mp4"
-          poster="/src/assets/images/hero_agriculture_harvest_1793303356367.jpg"
+          poster={heroPoster}
           autoPlay={!prefersReducedMotion}
           loop
           muted={isMuted}
@@ -201,7 +182,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             transition={{ delay: 0.3, duration: 0.6 }}
             className="text-sm sm:text-base text-stone-100 max-w-xl font-normal leading-relaxed"
           >
-            Compare sample listings from producers, review crop details, and explore the order and delivery workflow.
+            Browse producer listings, review available lot details, and submit an order request.
           </motion.p>
 
           {/* Minimal 2-Button Action Bar */}
@@ -245,20 +226,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </div>}
       </motion.section>
 
-      {/* Live Commodity Spot Market Ticker Bar */}
-      <CommodityTicker />
-
       <section aria-labelledby="available-lots-title" className="space-y-3">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-[#0D5C3A]">Ready to trade</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#0D5C3A]">Current producer inventory</p>
             <h2 id="available-lots-title" className="text-lg font-bold font-display text-stone-900">Available crop lots</h2>
           </div>
           <a href="#commodities-catalog" className="shrink-0 text-xs font-bold text-[#0D5C3A] hover:text-[#094B2E] underline underline-offset-4">
             Browse all lots
           </a>
         </div>
-        <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
+        {crops.length > 0 ? <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
           {crops.slice(0, 3).map((crop) => (
             <article key={crop.id} className="flex min-w-[min(84vw,340px)] snap-start items-center gap-3 rounded-xl border border-stone-200 bg-white p-3 shadow-xs sm:min-w-0 sm:flex-1">
               <img src={crop.image} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
@@ -270,14 +248,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <button
                 type="button"
                 onClick={() => handleQuickAdd(crop)}
-                aria-label={`Add ${crop.name} to escrow cart`}
+                aria-label={`Add ${crop.name} to order cart`}
+                disabled={crop.minimumOrderTonnes > crop.availableStockTonnes}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0D5C3A] text-white transition hover:bg-[#094B2E]"
               >
                 <Plus className="h-4 w-4 text-[#F7B500]" />
               </button>
             </article>
           ))}
-        </div>
+        </div> : <p className="rounded-xl border border-stone-200 bg-white p-4 text-sm text-stone-600">No active producer listings yet.</p>}
       </section>
 
       {/* Commodity Search & Catalog Section */}
@@ -286,40 +265,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#48B749]">
               <Sparkles className="w-3.5 h-3.5 text-[#F7B500]" />
-              <span>Wholesale Commodity Clearinghouse</span>
+              <span>Producer marketplace</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-[#0D5C3A] font-display mt-0.5">
               Available Farm Commodities
             </h2>
             <p className="text-sm text-stone-600 mt-1">
-              Illustrative listings for comparing crop price, quantity, grade, and location.
+              Listings are supplied by producers. Prices are shown in USD as provided.
             </p>
           </div>
 
-          {/* Multi-Currency & Unit Toggles */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Currency Selector */}
-            <div role="group" aria-label="Currency" className="flex items-center gap-1 p-1 bg-white rounded-lg border border-stone-200/90 text-sm">
-              <Globe className="w-3.5 h-3.5 text-stone-400 ml-2 mr-1" />
-              <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider hidden sm:inline mr-1">Currency:</span>
-              {(['USD', 'GHS', 'KES', 'EUR'] as CurrencyCode[]).map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCurrency(c)}
-                  aria-pressed={currency === c}
-                  className={`min-h-9 px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
-                    currency === c
-                      ? 'bg-[#0D5C3A] text-white shadow-2xs'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
-                  }`}
-                  title={CURRENCY_CONFIG[c].label}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-
-            {/* Unit Selector */}
             <div role="group" aria-label="Price unit" className="flex items-center gap-1 p-1 bg-white rounded-lg border border-stone-200/90 text-sm">
               <button
                 onClick={() => setUnit('MT')}
@@ -344,6 +300,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 Per 50kg Sack
               </button>
             </div>
+            <span className="text-xs text-stone-500">Currency: USD</span>
           </div>
         </div>
 
@@ -375,7 +332,20 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             >
               <option value="all">All Grades</option>
               <option value="grade1">Grade 1 (Premium)</option>
-              <option value="organic">Organic label (sample)</option>
+              <option value="organic">Organic listing</option>
+            </select>
+
+            <label className="sr-only" htmlFor="marketplace-sort">Sort listings</label>
+            <select
+              id="marketplace-sort"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="min-h-10 bg-stone-50 border border-stone-200 text-stone-800 py-1.5 px-3 rounded-md focus:outline-none font-medium"
+            >
+              <option value="recent">Recently listed</option>
+              <option value="price-low-high">Price: low to high</option>
+              <option value="price-high-low">Price: high to low</option>
+              <option value="name">Name: A to Z</option>
             </select>
 
             <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 px-3 py-1.5 rounded-lg">
@@ -411,7 +381,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               {cat.label}
             </button>
           ))}
-          <span className="text-xs text-stone-500 ml-auto whitespace-nowrap pl-4">
+          <span aria-live="polite" className="text-xs text-stone-500 ml-auto whitespace-nowrap pl-4">
             Showing <strong className="text-stone-900 tabular-nums">{filteredCrops.length}</strong> available lots
           </span>
         </div>
@@ -419,7 +389,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         {/* Products Grid */}
         {filteredCrops.length === 0 ? (
           <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center text-sm text-stone-600">
-            No active listings match these filters. Producers can publish inventory from the Farmer Hub.
+            {crops.length === 0
+              ? 'No active producer listings yet. Connect the shared marketplace service to publish and browse real inventory.'
+              : 'No active listings match these filters. Try changing your search or filters.'}
           </div>
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -453,7 +425,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                 <div>
                   <div className="flex items-center gap-2 text-xs text-stone-500 mb-1.5">
-                    <span className="uppercase tracking-wider font-extrabold text-[10px] text-[#48B749]">{crop.category}</span>
+                    <span className="uppercase tracking-wider font-extrabold text-[10px] text-[#48B749]">{categories.find((category) => category.id === crop.category)?.label ?? crop.category}</span>
                     <span aria-hidden="true">·</span>
                     <span>MOQ: {crop.minimumOrderTonnes} MT</span>
                     <span aria-hidden="true">·</span>
@@ -484,31 +456,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       <p className="font-semibold text-stone-800 truncate">{crop.farmerName}</p>
                       <p className="text-[11px] text-stone-500 truncate">{crop.farmerFarm}</p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-[#0D5C3A] font-extrabold tabular-nums">★ {crop.farmerRating}</span>
-                      <p className="text-[10px] text-stone-500">{crop.farmerCompletedDeals} deals</p>
-                    </div>
+                    {(crop.farmerRating > 0 || crop.farmerCompletedDeals > 0) && (
+                      <div className="text-right shrink-0">
+                        {crop.farmerRating > 0 && <span className="text-[#0D5C3A] font-extrabold tabular-nums">★ {crop.farmerRating}</span>}
+                        {crop.farmerCompletedDeals > 0 && <p className="text-[10px] text-stone-500">{crop.farmerCompletedDeals} deals</p>}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Verification & Sample Actions Strip */}
-                  <div className="mt-2.5 pt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => setCertModalCrop(crop)}
-                      className="flex-1 py-1 px-2 bg-emerald-50 hover:bg-emerald-100/80 text-[#0D5C3A] rounded-lg border border-emerald-200/70 text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-                      title="View illustrative quality record"
-                    >
-                      <FileCheck2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                      <span>Lab Sheet</span>
-                    </button>
-                    <button
-                      onClick={() => setSampleModalCrop(crop)}
-                      className="flex-1 py-1 px-2 bg-amber-50/80 hover:bg-amber-100/80 text-amber-900 rounded-lg border border-amber-200/80 text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-                      title="Preview the sample-request workflow"
-                    >
-                      <Package className="w-3.5 h-3.5 text-[#F7B500] shrink-0" />
-                      <span>1kg Sample</span>
-                    </button>
-                  </div>
                 </div>
 
                 {/* Price Baseline and Primary CTA */}
@@ -537,7 +492,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       whileHover={{ scale: 1.04 }}
                       whileTap={{ scale: 0.96 }}
                       onClick={() => handleQuickAdd(crop)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#0D5C3A] hover:bg-[#094B2E] rounded-lg transition shadow-xs whitespace-nowrap cursor-pointer"
+                      disabled={crop.minimumOrderTonnes > crop.availableStockTonnes}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#0D5C3A] hover:bg-[#094B2E] rounded-lg transition shadow-xs whitespace-nowrap cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Plus className="w-3.5 h-3.5 text-[#F7B500]" />
                       <span>Order Lot</span>
@@ -586,10 +542,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <span>Integrated Agricultural Platform</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-[#0D5C3A] font-display mt-0.5">
-              Core Platform Ecosystem
+              Marketplace tools
             </h2>
             <p className="text-xs text-stone-600 mt-0.5">
-              Four dedicated, secure modules designed to streamline trade, logistics, and farmer livelihoods.
+              Review listings, manage inventory, exchange messages, and record shipment updates.
             </p>
           </div>
           <span className="text-xs text-stone-500 font-medium hidden sm:inline">
@@ -625,7 +581,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   Inventory &amp; Sales Terminal
                 </p>
                 <p className="text-xs text-stone-600 mt-2 leading-relaxed">
-                  Register new harvest batches, calibrate moisture levels, monitor silo stocks, and manage outgrower sales with rural offline sync.
+                  Keep inventory records on this device or publish shared listings when the account service is configured.
                 </p>
               </div>
 
@@ -636,11 +592,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Offline field data persistence</span>
+                  <span>Local inventory drafts</span>
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Automated lot &amp; moisture tags</span>
+                  <span>Producer-entered lot details</span>
                 </p>
               </div>
             </div>
@@ -673,7 +629,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <Truck className="w-6 h-6 text-[#0D5C3A] group-hover:text-[#F7B500] transition-colors" />
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200/80">
-                  Sample tracking
+                  Seller-entered status
                 </span>
               </div>
 
@@ -685,22 +641,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   Saved shipment status
                 </p>
                 <p className="text-xs text-stone-600 mt-2 leading-relaxed">
-                  Explore sample shipment progress and cargo-condition details from farm gate to destination.
+                  Review shipment records entered by the seller. Carrier GPS and sensor feeds are not connected.
                 </p>
               </div>
 
               <div className="space-y-1.5 pt-2 border-t border-stone-100 text-[11px] text-stone-600 font-medium">
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Simulated GPS trip progress</span>
+                  <span>Seller-entered shipment events</span>
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Cargo temperature &amp; humidity</span>
+                  <span>Carrier feeds are not connected</span>
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Weighbridge electronic receipts</span>
+                  <span>No sensor or weighbridge integration</span>
                 </p>
               </div>
             </div>
@@ -709,7 +665,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => (onNavigateTab ? onNavigateTab('tracking') : onTrackWaybill('AGRO-TRK-88294'))}
+                onClick={() => (onNavigateTab ? onNavigateTab('tracking') : onTrackWaybill(''))}
                 className="w-full py-2.5 px-4 bg-[#0D5C3A] hover:bg-[#094B2E] text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>Track Consignments</span>
@@ -745,22 +701,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   Direct Contract Negotiation
                 </p>
                 <p className="text-xs text-stone-600 mt-2 leading-relaxed">
-                  Connect commercial procurement teams directly with farmer syndicates. Issue instant price quotes and schedule pickups.
+                  Send messages to producers using the shared messaging service.
                 </p>
               </div>
 
               <div className="space-y-1.5 pt-2 border-t border-stone-100 text-[11px] text-stone-600 font-medium">
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Instant volume &amp; price quotes</span>
+                  <span>Shared buyer-producer conversations</span>
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Interactive trade proposals</span>
+                  <span>Order requests stored in Supabase</span>
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Seamless escrow checkout link</span>
+                  <span>Payment processing is not connected</span>
                 </p>
               </div>
             </div>
@@ -781,7 +737,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             </div>
           </motion.div>
 
-          {/* Box 4: The Escrow Vault */}
+          {/* Box 4: Order requests */}
           <motion.div
             whileHover={{ y: -5, boxShadow: "0 12px 30px -8px rgba(13, 92, 58, 0.18)" }}
             transition={{ duration: 0.25 }}
@@ -802,7 +758,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
               <div>
                 <h3 className="text-lg font-extrabold text-stone-900 font-display group-hover:text-[#0D5C3A] transition-colors">
-                  The Escrow Vault
+                  Order requests
                 </h3>
                 <p className="text-xs font-semibold text-[#48B749] mt-0.5">
                   Order Settlement Workflow
@@ -819,11 +775,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Example payout destinations</span>
+                  <span>Review request status</span>
                 </p>
                 <p className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#48B749] shrink-0" />
-                  <span>Inspection-linked release step</span>
+                  <span>Payments and escrow are not connected</span>
                 </p>
               </div>
             </div>
@@ -835,7 +791,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 onClick={() => (onNavigateTab ? onNavigateTab('escrow') : null)}
                 className="w-full py-2.5 px-4 bg-[#0D5C3A] hover:bg-[#094B2E] text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>View Escrow Vault</span>
+                <span>View order requests</span>
                 <ArrowRight className="w-3.5 h-3.5 text-[#F7B500]" />
               </motion.button>
             </div>
@@ -843,14 +799,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </div>
       </section>
 
-      {/* 3-Step "How to Trade with Confidence" Buyer/Farmer Onboarding Guide */}
-      <TradeConfidenceGuide
-        onExploreEscrow={() => onNavigateTab && onNavigateTab('escrow')}
-        onExploreTracking={() => onNavigateTab && onNavigateTab('tracking')}
-      />
-
-      {/* Flagship Brand Spotlight */}
-      <section id="flagship-spotlight" className="bg-[#FAF9F5] rounded-3xl border border-stone-200/80 p-6 sm:p-10 lg:p-12 overflow-hidden shadow-xs">
+      {flagshipRice && <section className="bg-[#FAF9F5] rounded-3xl border border-stone-200/80 p-6 sm:p-10 lg:p-12 overflow-hidden shadow-xs">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Flagship Product Packaging Image */}
           <div className="lg:col-span-5 relative flex items-center justify-center">
@@ -860,14 +809,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               className="relative rounded-2xl overflow-hidden shadow-xl border-4 border-white aspect-[4/3] w-full max-w-md bg-stone-100 group"
             >
               <img
-                src="https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?auto=format&fit=crop&w=800&q=80"
-                alt="Agroline Royal Aromatic Long-Grain Rice Sacks"
+                src={flagshipRice.image}
+                alt={flagshipRice.name}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
               />
               <div className="absolute top-3 left-3 bg-[#0D5C3A] text-white px-3 py-1 rounded-full text-[11px] font-bold shadow-xs flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 text-[#F7B500]" />
-                <span>Flagship Consumer Brand</span>
+                <span>Featured listing</span>
               </div>
             </motion.div>
           </div>
@@ -876,18 +825,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           <div className="lg:col-span-7 space-y-6">
             <div>
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#48B749]">
-                <span>Our Flagship Harvest</span>
-                <span aria-hidden="true">·</span>
-                <span>Kasunya Valley Scheme</span>
+                <span>Featured producer listing</span>
               </div>
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#0D5C3A] font-display mt-1">
-                Agroline Royal Aromatic Rice
+                {flagshipRice.name}
               </h2>
               <p className="text-xs sm:text-sm text-stone-600 font-medium mt-1">
-                Super-Fragrant Jasmine Long-Grain · Cultivated by 850 Women Outgrowers
+                {flagshipRice.variety} · {flagshipRice.location}
               </p>
               <p className="text-xs sm:text-sm text-stone-700 mt-3 leading-relaxed">
-                  Example details for origin, packaging, and quality fields.
+                {flagshipRice.description}
               </p>
             </div>
 
@@ -895,85 +842,45 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
                 <span className="font-bold text-[#0D5C3A] block">Origin</span>
-                <span className="text-xs text-stone-600">Sample location</span>
+                <span className="text-xs text-stone-600">{flagshipRice.location}</span>
               </div>
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
                 <span className="font-bold text-[#0D5C3A] block">Handling</span>
-                <span className="text-xs text-stone-600">Example detail</span>
+                <span className="text-xs text-stone-600">{flagshipRice.packaging || 'Not provided'}</span>
               </div>
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
                 <span className="font-bold text-[#0D5C3A] block">Moisture</span>
-                <span className="text-xs text-stone-600">Sample reading</span>
+                <span className="text-xs text-stone-600">{flagshipRice.moistureContent}%</span>
               </div>
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
                 <span className="font-bold text-[#0D5C3A] block">Producer</span>
-                <span className="text-xs text-stone-600">Sample profile</span>
+                <span className="text-xs text-stone-600">{flagshipRice.farmerName}</span>
               </div>
             </div>
 
-            {/* Pack Size Selector */}
-            <div className="pt-2">
-              <span className="text-xs font-bold text-stone-800 block mb-2">Select Packaging Size:</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { size: '5kg', label: '5kg Pouch', price: '$8.50' },
-                  { size: '25kg', label: '25kg Sack', price: '$38.00' },
-                  { size: '50kg', label: '50kg Wholesale', price: '$72.00' },
-                  { size: '1MT', label: '1 MT Bulk Pallet', price: '$580.00' },
-                ].map((pack) => (
-                  <button
-                    key={pack.size}
-                    onClick={() => setSelectedPackSize(pack.size as any)}
-                    className={`p-2.5 rounded-xl border text-left transition ${
-                      selectedPackSize === pack.size
-                        ? 'border-[#0D5C3A] bg-[#0D5C3A]/10 font-bold text-[#0D5C3A]'
-                        : 'border-stone-300 bg-white hover:bg-stone-50 text-stone-700'
-                    }`}
-                  >
-                    <span className="block text-xs">{pack.label}</span>
-                    <span className="text-sm font-extrabold text-[#0D5C3A] tabular-nums">{pack.price}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Action Row */}
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleAddFlagshipPack}
+                type="button"
+                onClick={() => {
+                  setSelectedCrop(flagshipRice);
+                  setOrderQuantity(flagshipRice.minimumOrderTonnes);
+                }}
                 className="px-6 py-3 bg-[#0D5C3A] hover:bg-[#094B2E] text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition flex items-center gap-2"
               >
-                <Plus className="w-4 h-4 text-[#F7B500]" />
-                <span>Add {selectedPackSize} to Escrow Cart</span>
+                <span>View listing details</span>
+                <ArrowRight className="w-4 h-4" />
               </motion.button>
               <button
                 onClick={() => flagshipRice && onOpenMessage(flagshipRice)}
                 className="px-5 py-3 border border-stone-300 bg-white hover:bg-stone-50 text-stone-800 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-1.5"
               >
                 <MessageSquare className="w-4 h-4 text-stone-600" />
-                <span>Chat with Outgrower Scheme</span>
+                <span>Contact producer</span>
               </button>
             </div>
           </div>
         </div>
-      </section>
-
-      {/* Meet the Outgrowers Ribbon & Cooperative Stories */}
-      <OutgrowerSpotlight
-        onOpenMessage={(_farmerName, cropName) => {
-          const crop = crops.find((item) => item.name.toLowerCase().includes(cropName.toLowerCase()));
-          if (crop) onOpenMessage(crop);
-          else if (onNavigateTab) onNavigateTab('messages');
-        }}
-        onFilterByProducer={(producerName) => {
-          setSearchQuery(producerName);
-          document.getElementById('commodities-catalog')?.scrollIntoView({
-            behavior: prefersReducedMotion ? 'auto' : 'smooth',
-          });
-        }}
-      />
+      </section>}
 
       {/* Crop Lot Detail & Escrow Purchase Modal */}
       <AnimatePresence>
@@ -1016,7 +923,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       {selectedCrop.category} · Harvest {selectedCrop.harvestDate}
                     </span>
                     <span className="text-xs font-bold text-[#0D5C3A] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                      Sample inventory
+                      Producer listing
                     </span>
                   </div>
                   <h2 className="text-2xl font-extrabold text-stone-900 font-display mt-1">{selectedCrop.name}</h2>
@@ -1040,42 +947,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                   <div>
                     <span className="text-stone-500 block">Packaging</span>
-                    <span className="font-bold text-stone-900 truncate block">{selectedCrop.packaging}</span>
+                    <span className="font-bold text-stone-900 truncate block">{selectedCrop.packaging || 'Not provided'}</span>
                   </div>
                 </div>
 
-                {/* Verified Certificates & Actions */}
+                {/* Producer-provided listing information */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-xs font-bold text-stone-800">Listed Quality Information</h4>
-                    <span className="text-xs text-stone-600 font-medium">Sample certificates</span>
+                    <h4 className="text-xs font-bold text-stone-800">Certifications listed by producer</h4>
+                    <span className="text-xs text-stone-600 font-medium">Not independently verified here</span>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs">
-                    {selectedCrop.certifications.map((cert, i) => (
+                    {selectedCrop.certifications.length > 0 ? selectedCrop.certifications.map((cert, i) => (
                       <span key={i} className="bg-stone-100 text-stone-700 px-2.5 py-1 rounded-lg border border-stone-200 font-medium">
-                        ✓ {cert}
+                        {cert}
                       </span>
-                    ))}
-                  </div>
-
-                  {/* Actions for Laboratory Certificate and Free 1kg Sample */}
-                  <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setCertModalCrop(selectedCrop)}
-                      className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100/90 text-[#0D5C3A] rounded-xl text-xs font-bold border border-emerald-200/90 transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <FileCheck2 className="w-4 h-4 text-[#48B749]" />
-                      <span>View Sample Lab Data</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSampleModalCrop(selectedCrop)}
-                      className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100/90 text-amber-900 rounded-xl text-xs font-bold border border-amber-200/90 transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Package className="w-4 h-4 text-[#F7B500]" />
-                      <span>Request 1kg Free Physical Sample</span>
-                    </button>
+                    )) : <span className="text-stone-500">No certifications listed.</span>}
                   </div>
                 </div>
 
@@ -1090,8 +977,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         type="number"
                         min={selectedCrop.minimumOrderTonnes}
                         max={selectedCrop.availableStockTonnes}
+                        step="0.1"
                         value={orderQuantity}
-                        onChange={(e) => setOrderQuantity(Math.max(selectedCrop.minimumOrderTonnes, parseInt(e.target.value) || selectedCrop.minimumOrderTonnes))}
+                        onChange={(e) => setOrderQuantity(Math.min(selectedCrop.availableStockTonnes, Math.max(selectedCrop.minimumOrderTonnes, parseFloat(e.target.value) || selectedCrop.minimumOrderTonnes)))}
                         className="w-24 px-3 py-1.5 border border-stone-300 rounded-lg text-sm font-bold tabular-nums"
                       />
                       <span className="text-xs text-stone-500">Metric Tonnes</span>
@@ -1099,15 +987,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
 
                   <div className="text-right">
-                    <span className="text-xs text-stone-500 block">Total Escrow Amount</span>
+                    <span className="text-xs text-stone-500 block">Estimated product subtotal</span>
                     <span className="text-2xl font-extrabold text-[#0D5C3A] font-display tabular-nums block">
                       {formatTotal(orderQuantity * selectedCrop.pricePerTonne)}
                     </span>
-                    {currency !== 'USD' && (
-                      <span className="text-[11px] text-stone-500">
-                        (≈ ${(orderQuantity * selectedCrop.pricePerTonne).toLocaleString()} USD)
-                      </span>
-                    )}
                   </div>
                 </div>
 
@@ -1131,7 +1014,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     }}
                     className="px-6 py-2.5 bg-[#0D5C3A] hover:bg-[#094B2E] text-white rounded-xl text-xs font-bold shadow-md transition flex items-center gap-2 cursor-pointer"
                   >
-                    <span>Add to Escrow Order</span>
+                    <span>Add to order request</span>
                     <ArrowRight className="w-4 h-4" />
                   </motion.button>
                 </div>
@@ -1141,23 +1024,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Official Laboratory Quality Inspection Certificate Modal */}
-      <LabCertificateModal
-        crop={certModalCrop}
-        isOpen={!!certModalCrop}
-        onClose={() => setCertModalCrop(null)}
-      />
-
-      {/* Commercial 1kg Vacuum-Sealed Lab Sample Request Modal */}
-      <SampleRequestModal
-        crop={sampleModalCrop}
-        isOpen={!!sampleModalCrop}
-        onClose={() => setSampleModalCrop(null)}
-        onSubmitSuccess={(code, name) => {
-          setAddedToast(`Sample request saved for ${name}. Reference: ${code}`);
-          setTimeout(() => setAddedToast(null), 5000);
-        }}
-      />
     </div>
     </MotionConfig>
   );
