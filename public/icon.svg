@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B3B22"/>
+      <stop offset="100%" stop-color="#0E2314"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2B144"/>
+      <stop offset="100%" stop-color="#C06C3E"/>
+    </linearGradient>
+    <linearGradient id="sprout" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7BB86F"/>
+      <stop offset="100%" stop-color="#3B7D3F"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <!-- Circular field contour lines -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#2B5336" stroke-width="4" stroke-dasharray="8 8"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#2B5336" stroke-width="3" opacity="0.6"/>
+  <!-- Wheat Stalk & Sprout Graphic -->
+  <g transform="translate(256, 260)">
+    <!-- Central Stalk -->
+    <path d="M0,130 Q-5,20 0,-130" stroke="#7BB86F" stroke-width="12" stroke-linecap="round" fill="none"/>
+    <!-- Left Grains -->
+    <path d="M-6,-90 C-36,-100 -50,-60 -6,-50 Z" fill="url(#leaf)"/>
+    <path d="M-6,-40 C-46,-50 -60,-10 -6,0 Z" fill="url(#leaf)"/>
+    <path d="M-6,10 C-46,0 -60,40 -6,50 Z" fill="url(#leaf)"/>
+    <!-- Right Grains -->
+    <path d="M6,-90 C36,-100 50,-60 6,-50 Z" fill="url(#leaf)"/>
+    <path d="M6,-40 C46,-50 60,-10 6,0 Z" fill="url(#leaf)"/>
+    <path d="M6,10 C46,0 60,40 6,50 Z" fill="url(#leaf)"/>
+    <!-- Central Top Grain -->
+    <path d="M0,-145 C-18,-115 -12,-85 0,-85 C12,-85 18,-115 0,-145 Z" fill="#E2B144"/>
+    <!-- Base Sprout Leaves -->
+    <path d="M-6,80 C-50,75 -80,120 -6,110 Z" fill="url(#sprout)"/>
+    <path d="M6,80 C50,75 80,120 6,110 Z" fill="url(#sprout)"/>
+  </g>
+  <!-- Furrow lines representing soil & logistics -->
+  <path d="M120,400 Q256,380 392,400" stroke="#C06C3E" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.8"/>
+  <path d="M160,424 Q256,410 352,424" stroke="#C06C3E" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.6"/>
+</svg>

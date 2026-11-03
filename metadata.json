@@ -1,0 +1,6 @@
+{
+  "name": "Agroline Ltd",
+  "description": "Professional agricultural marketplace connecting rural producers with verified buyers, featuring secure escrow payments, real-time shipment tracking, offline-first farmer inventory dashboard, and direct trade messaging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
