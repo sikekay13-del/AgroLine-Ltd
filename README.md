@@ -81,3 +81,4 @@ Netlify reads `VITE_` variables while building, so after adding or changing them
 
 Yes—you can keep changing it after it is hosted. With Git-connected deployment, edit the project, commit and push to the connected branch, and Netlify will build and publish the update automatically. For a one-time manual deploy instead, run `npm run build` and upload the generated `dist` directory in Netlify; repeat the build and upload whenever you want to publish changes.
 # Agroline-Ltd
+# AgroLine-Ltd
